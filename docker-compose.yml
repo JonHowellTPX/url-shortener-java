@@ -1,0 +1,35 @@
+version: '3.9'
+
+services:
+  api:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: url-shortener-api
+    ports:
+      - "8080:8080"
+    volumes:
+      - db-data:/data
+    environment:
+      - ASPNETCORE_ENVIRONMENT=Production
+      - DatabasePath=/data/urlshortener.db
+      - AllowedOrigins__0=http://localhost:3000
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:8080/urls || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: url-shortener-frontend
+    ports:
+      - "3000:80"
+    depends_on:
+      api:
+        condition: service_healthy
+
+volumes:
+  db-data:
