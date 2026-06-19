@@ -1,40 +1,25 @@
 # Build stage
-FROM mcr.microsoft.com/dotnet/sdk:8.0 AS build
-WORKDIR /src
-
-COPY UrlShortener.sln .
-COPY UrlShortener.Api/UrlShortener.Api.csproj UrlShortener.Api/
-COPY UrlShortener.Tests/UrlShortener.Tests.csproj UrlShortener.Tests/
-
-RUN dotnet restore
-
-COPY . .
-
-RUN dotnet build -c Release --no-restore
-RUN dotnet test -c Release --no-build --verbosity normal
-RUN dotnet publish UrlShortener.Api/UrlShortener.Api.csproj -c Release -o /app/publish --no-build
-
-# Runtime stage
-FROM mcr.microsoft.com/dotnet/aspnet:8.0 AS runtime
+FROM maven:3.9.9-eclipse-temurin-17 AS build
 WORKDIR /app
 
-RUN apt-get update \
-    && apt-get install -y --no-install-recommends curl \
-    && rm -rf /var/lib/apt/lists/*
+COPY pom.xml ./
+COPY src ./src
 
-# Create a non-root user for security
+RUN mvn -B package -DskipTests
+
+# Runtime stage
+FROM eclipse-temurin:17-jre-jammy
+WORKDIR /app
+
 RUN addgroup --system appgroup && adduser --system --ingroup appgroup appuser
-
-# Volume for the SQLite database
 RUN mkdir -p /data && chown appuser:appgroup /data
 VOLUME ["/data"]
 
-COPY --from=build /app/publish .
+COPY --from=build /app/target/url-shortener-0.0.1-SNAPSHOT.jar ./app.jar
 
-ENV ASPNETCORE_URLS=http://+:8080
-ENV DatabasePath=/data/urlshortener.db
+ENV DATABASE_PATH=/data/urlshortener.db
+ENV SERVER_PORT=8080
 
 USER appuser
 EXPOSE 8080
-
-ENTRYPOINT ["dotnet", "UrlShortener.Api.dll"]
+ENTRYPOINT ["java", "-jar", "/app/app.jar"]

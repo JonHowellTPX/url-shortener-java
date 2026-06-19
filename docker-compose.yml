@@ -11,9 +11,7 @@ services:
     volumes:
       - db-data:/data
     environment:
-      - ASPNETCORE_ENVIRONMENT=Production
-      - DatabasePath=/data/urlshortener.db
-      - AllowedOrigins__0=http://localhost:3000
+      - DATABASE_PATH=/data/urlshortener.db
     healthcheck:
       test: ["CMD-SHELL", "curl -f http://localhost:8080/urls || exit 1"]
       interval: 10s

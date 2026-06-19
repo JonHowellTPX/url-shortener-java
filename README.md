@@ -1,6 +1,6 @@
 # Snip – URL Shortener
 
-A full-stack URL shortener built with **C# / ASP.NET Core 8** (backend) and **React + TypeScript** (frontend), containerised with Docker.
+A full-stack URL shortener built with **Java Spring Boot** (backend) and **React + TypeScript** (frontend), containerised with Docker.
 
 ---
 
@@ -8,9 +8,7 @@ A full-stack URL shortener built with **C# / ASP.NET Core 8** (backend) and **Re
 
 ```
 frontend/      React + TypeScript (Vite)
-backend/
-  UrlShortener.Api/      ASP.NET Core 8 Web API + SQLite (EF Core)
-  UrlShortener.Tests/    xUnit unit + integration tests
+backend/       Java Spring Boot Web API + SQLite
 docker-compose.yml       Orchestrates both services
 ```
 
@@ -33,7 +31,6 @@ docker compose up --build
 
 - Frontend: http://localhost:3000
 - API:      http://localhost:8080
-- Swagger:  http://localhost:8080/swagger (only in Development)
 
 The SQLite database is persisted in the `db-data` Docker volume across restarts.
 
@@ -53,13 +50,14 @@ docker compose down -v
 
 ### Option B – Running services separately (development)
 
-**Prerequisites:** .NET 8 SDK, Node.js 20+.
+**Prerequisites:** Java 17+, Maven, Node.js 20+.
 
 **Backend**
 
 ```bash
-cd backend/UrlShortener.Api
-dotnet run
+cd backend
+mvn clean package -DskipTests
+java -jar target/url-shortener-0.0.1-SNAPSHOT.jar
 # API listening on http://localhost:8080
 ```
 
@@ -76,11 +74,11 @@ npm run dev
 
 ## Running tests
 
-**Backend (unit + integration)**
+**Backend**
 
 ```bash
 cd backend
-dotnet test --verbosity normal
+mvn test
 ```
 
 **Frontend**
@@ -95,7 +93,7 @@ npm test
 
 ## API reference
 
-The API matches the provided `openapi.yaml` contract exactly.
+The API exposes the same contract expected by the existing frontend.
 
 | Method | Path | Description |
 |--------|------|-------------|
@@ -148,16 +146,14 @@ Returns `204 No Content` on success, `404` if alias not found.
 
 ## Design decisions & assumptions
 
-**Persistence** — SQLite via EF Core. Zero-dependency, file-based, and entirely sufficient for this exercise. The database file path is configurable via `DatabasePath` in `appsettings.json` or an environment variable, and is volume-mounted in Docker so data survives container restarts.
+**Persistence** — SQLite via JDBC. The database file path is configurable via the `DATABASE_PATH` environment variable and is volume-mounted in Docker so data survives container restarts.
 
 **Alias validation** — Aliases must be 2–64 characters, containing only letters, numbers, and hyphens. This mirrors typical URL shortener conventions and avoids characters that are awkward in URLs.
 
-**Random alias generation** — 7-character Base62 strings (~3.5 trillion combinations), generated using `Random.Shared` which is thread-safe. Collision probability is negligible at realistic scales; the service retries on collision naturally (EF unique constraint would surface it).
+**Random alias generation** — 7-character Base62 strings, generated inside the service layer. Collision probability is negligible at realistic scales; duplicate alias attempts return a clean 400 response.
 
-**Error handling** — A global exception middleware catches unhandled exceptions and returns a clean JSON `{ "error": "..." }` envelope. Domain errors (duplicate alias, invalid input) are surfaced as typed exceptions from the service layer, translated to 400s in the controller.
+**Error handling** — Invalid input and domain errors are translated into JSON error responses like `{ "error": "..." }`.
 
-**Testing** — The backend has both unit tests (service layer, in-memory EF) and integration tests (`WebApplicationFactory` + in-memory EF, full HTTP stack). The frontend has component tests (React Testing Library) and service layer tests (mocked fetch).
+**Testing** — The backend includes service-level tests and can be extended with integration tests. The frontend includes React component tests and service-level API tests.
 
-**Frontend** — Intentionally lightweight: a custom hook (`useUrlShortener`) owns all state and API interaction; components are purely presentational. No external state management library is needed at this scale.
-
-**CORS** — Allowed origins are configured in `appsettings.json`. In the Docker Compose setup, the Nginx reverse proxy means the frontend and API appear on the same origin to the browser, so CORS is only relevant in local development.
+**Frontend** — The hosted frontend uses Nginx to proxy `/shorten`, `/urls`, and alias requests to the API, so the same Docker setup works without CORS issues.
